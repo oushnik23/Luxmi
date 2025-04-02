@@ -190,14 +190,11 @@ def reorder_group(group):
     # Split "Subtotal" rows from others
     subtotal = group[group.index.get_level_values(1) == 'Subtotal']
     others = group[group.index.get_level_values(1) != 'Subtotal']
-    
-   
+       
     others = others.reindex(
-        sorted(
-            others.index,
+        sorted(others.index,
             key=lambda x: desired_order2.index(x[1]) if x[1] in desired_order2 else len(desired_order2)
-        )
-    )
+        ))
     
     # Append "Subtotal" back at the end
     return pd.concat([others, subtotal])
@@ -210,9 +207,6 @@ pivot_df_reordered = pivot_df_without_grand_total.groupby(level=0, group_keys=Fa
 
 # Append "Grand Total" back at the bottom
 pivot_df_final = pd.concat([pivot_df_reordered, grand_total])
-
-# Update the DataFrame with the new column order
-#pivot_df = pivot_df_final[new_columns]
 
 #-----------------------------------------------FOR SALE-------------------------------------------------------
 
@@ -360,13 +354,10 @@ def reorder_group(group):
     subtotal = group[group.index.get_level_values(1) == 'Subtotal']
     others = group[group.index.get_level_values(1) != 'Subtotal']
     
-   
     others = others.reindex(
-        sorted(
-            others.index,
+        sorted(others.index,
             key=lambda x: desired_order2.index(x[1]) if x[1] in desired_order2 else len(desired_order2)
-        )
-    )
+        ))
     
     # Append "Subtotal" back at the end
     return pd.concat([others, subtotal])
@@ -380,80 +371,92 @@ pivot_df_reordered2 = pivot_df_without_grand_total2.groupby(level=0, group_keys=
 # Append "Grand Total" back at the bottom
 pivot_df_final2 = pd.concat([pivot_df_reordered2, grand_total2])
 
+
 #------------------------------------------DESIGN--------------------------------------------#
 
-with pd.ExcelWriter("final_result.xlsx", engine="openpyxl") as writer:
-    pivot_df_final.to_excel(writer, sheet_name="Summary", startrow=0)
+with pd.ExcelWriter("final_result_new2.xlsx", engine="openpyxl") as writer:
+    pivot_df_final2.to_excel(writer, sheet_name="EST", startrow=0)
     
-    pivot_df_final2.to_excel(writer, sheet_name="Summary", startrow= len(pivot_df_final) + 5 + 1)
+    start_row_2 = len(pivot_df_final2) + 6  # Ensure the second table starts at the correct position
+    pivot_df_final.to_excel(writer, sheet_name="EST", startrow=start_row_2)
 
     workbook = writer.book
-    worksheet = writer.sheets["Summary"]
+    worksheet = writer.sheets["EST"]
+        
+    worksheet.freeze_panes = "A3"
 
-    # Define border style (thin border for all sides)
+    # Define border, font, and colors
     thin_border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin"))
-
-    # Define bold font for subtotal and grand total
+        left=Side(style="thin"),right=Side(style="thin"),
+        top=Side(style="thin"),bottom=Side(style="thin")
+    )
     bold_font = Font(bold=True)
-
-    # Define light green fill for subtotal and grand total rows
     light_green_fill = PatternFill(start_color="92D050", end_color="92D050", fill_type="solid")
-    light_green_fill = PatternFill(start_color="92D050", end_color="92D050", fill_type="solid")  # Light green for Subtotal rows
-    # Loop through all rows and columns
+    light_blue_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+    
+    yellow_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+
+    for cell in worksheet[1]:  # Row 1
+        cell.fill = yellow_fill
+
+    # Apply formatting for both tables
     for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row, max_col=worksheet.max_column):
-        first_cell = row[0]  # First cell of the row (index column)
+        first_cell = row[0]
 
-        # Check if row is "Subtotal" or "Grand Total"
+        # Highlight "Subtotal" and "Grand Total" rows
         if first_cell.value and any(x in str(first_cell.value).strip() for x in ["Subtotal", "Grand Total"]):
-
-            for cell in row:  # Apply to all columns in that row
+            for cell in row:
                 cell.font = bold_font
                 cell.fill = light_green_fill
 
-        for cell in row[1:]:  # Skip index column for formatting
-            if isinstance(cell.value, (int, float)):  # Check if cell contains a number
-                if cell.value == 0:
-                    cell.value = ""  # Replace zero with empty cell
-                else:
-                    cell.number_format = "#,##,##0"  # Apply Indian number format (1,00,000)
+        # Apply border, alignment, and zero-value handling
+        if first_cell.row < start_row_2 - 2 or first_cell.row >= start_row_2:  # Avoid formatting empty rows
+            for cell in row[1:]:
+                if isinstance(cell.value, (int, float)):
+                    if cell.value == 0:
+                        cell.value = ""
+                    else:
+                        cell.number_format = "#,##,##0"
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = thin_border
+    for row in [20, 27]:
+        for cell in worksheet[row]:
+            cell.border = None
+    
+    m1=df1['SaleAlies'].max()
 
-            cell.alignment = Alignment(horizontal="center", vertical="center")  # Center alignment
-            cell.border = thin_border  # Apply border
-            
-          
     # Rename headers for first two columns
     worksheet["A2"] = "SubTeaType"
+    worksheet["A19"] = "SubTeaType"
     worksheet["B2"] = "Grade"
+    worksheet["B19"] = "Grade"
+    worksheet["A2"].font = bold_font
+    worksheet["B2"].font = bold_font
+    worksheet["A19"].font = bold_font
+    worksheet["B19"].font = bold_font
+    
+    worksheet["A1"] = f"For Sale {m1-52 if m1>52 else m1}"
+    worksheet["A1"].font = Font(bold=True, color="FF0000")
+    
+    worksheet["A20"] = f"Upto Sale {m1-52 if m1>52 else m1}"
+    worksheet["A20"].font = Font(bold=True, color="FF0000")
+    
+    # Adjust column width
+    worksheet.column_dimensions['A'].width = 15
+    worksheet.column_dimensions['B'].width = 15
 
-    # Make headers bold
-    worksheet["A2"].font = Font(bold=True)
-    worksheet["B2"].font = Font(bold=True)
+    # Apply light blue fill for headers (Fix for both tables)
+    for row in [2, start_row_2 + 1]:  # Apply header formatting for both tables
+        for cell in worksheet.iter_rows(min_row=row, max_row=row, min_col=3, max_col=worksheet.max_column):
+            for header_cell in cell:
+                header_cell.fill = light_blue_fill  
 
-    # Increase the width of the first two columns
-    worksheet.column_dimensions['A'].width = 15  # Adjust width for SubTeaType
-    worksheet.column_dimensions['B'].width = 15  # Adjust width for GradeMDM
-
-    # Define fill color (light blue)
-    light_blue_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
-
-    # Apply color to first two rows, starting from column C
-    for row in worksheet.iter_rows(min_row=1, max_row=2, min_col=3, max_col=worksheet.max_column):
-        for cell in row:
-            cell.fill = light_blue_fill  # Apply fill color
-     
+    # Ensure subtotals are bold
     def apply_bold_to_subtotals(worksheet):
-        bold_font = Font(bold=True)
         for row in worksheet.iter_rows():
             for cell in row:
-                if cell.value == 'Subtotal':  # Check if the cell contains "Subtotal"
-                    for sub_cell in row:  # Apply bold font to the entire row
+                if cell.value == 'Subtotal':
+                    for sub_cell in row:
                         sub_cell.font = bold_font
 
     apply_bold_to_subtotals(worksheet)
-  
-# Save the workbook
-#workbook.save("final_result.xlsx")
